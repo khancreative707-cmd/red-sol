@@ -151,7 +151,7 @@ function drawShieldPanel(ctx, lv, power) {
   const g = ctx.createLinearGradient(0, 0, 0, h); g.addColorStop(0, 'rgba(20,70,110,.82)'); g.addColorStop(1, 'rgba(8,34,60,.82)'); ctx.fillStyle = g; ctx.fill();
   const col = lv ? '#4fe3ff' : '#8aa6b4'; ctx.shadowColor = col; ctx.shadowBlur = 16; ctx.strokeStyle = col; ctx.lineWidth = 5; ctx.stroke(); ctx.shadowBlur = 0;
   drawIcon(ctx, 'hull', 24, 34, 80, col); ctx.fillStyle = '#d8f6ff'; ctx.font = `800 28px ${FONT}`; ctx.fillText('SHIELD', 120, 58);
-  ctx.fillStyle = '#fff'; ctx.font = `900 60px ${FONT}`; ctx.fillText(lv ? 'LEVEL ' + lv : 'OFF', 118, 112); ctx.font = `700 20px ${FONT}`; ctx.fillStyle = '#b8e8f8'; ctx.fillText(['No power used', 'Uses a little power', 'Uses more power', 'Uses a LOT of power'][lv], 120, 142);
+  ctx.fillStyle = '#fff'; ctx.font = `900 44px ${FONT}`; ctx.fillText(lv ? 'LEVEL ' + lv : 'OFF', 118, 108); ctx.font = `700 20px ${FONT}`; ctx.fillStyle = '#b8e8f8'; ctx.fillText(['No power used', 'Uses a little power', 'Uses more power', 'Uses a LOT of power'][lv], 120, 142);
 }
 
 function drawEarthPanel(ctx, delay, low) {
