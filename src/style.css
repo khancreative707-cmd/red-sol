@@ -99,3 +99,7 @@ p{margin:6px 0;line-height:1.4;color:var(--ink)}
 #bUse{right:max(26px,env(safe-area-inset-right));bottom:max(28px,env(safe-area-inset-bottom));width:96px;height:96px}
 #bRun{right:max(138px,calc(env(safe-area-inset-right) + 112px));bottom:max(24px,env(safe-area-inset-bottom))}
 @media (max-height:420px){#joy{width:128px;height:128px;left:18px;bottom:16px}.rbtn{width:72px;height:72px}#bUse{width:84px;height:84px;right:18px;bottom:18px}#bRun{right:112px;bottom:14px}.card{padding:12px 16px}h2{font-size:22px}.logo{font-size:min(12vw,70px)}.menu{margin-top:12px}.pick{min-width:150px;padding:8px}.pick canvas{width:70px;height:70px}.stars{font-size:32px}}
+
+.fact{margin-top:10px;padding:10px 12px;border:1px solid var(--cyan);border-radius:14px;background:rgba(20,70,110,.35);font-size:14px;text-align:left}
+.rank{display:inline-flex;align-items:center;gap:12px;margin:8px 0;padding:8px 16px;border-radius:18px;border:2px solid var(--orange2);background:rgba(255,170,70,.14);text-align:left}
+.rank .medal{width:54px;height:54px;border-radius:50%;background:radial-gradient(circle at 35% 30%,#fff2b0,#ffb030 60%,#b8601a);color:#7a3a05;font-size:30px;display:flex;align-items:center;justify-content:center;box-shadow:0 0 18px #ff9a2a}

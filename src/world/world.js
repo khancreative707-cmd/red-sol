@@ -8,7 +8,7 @@ import { buildEnvironment } from './scene.js';
 import { CrewView } from './characters.js';
 import { FX } from './fx.js';
 import { MOD, ST } from './layout.js';
-import { makeCanvas, canvasTex, drawStatPanel, drawLeakPanel, drawSkyWarn, drawBubble, drawPrompt, drawIcon, rr, FONT, statColor, clamp, lerp } from './util.js';
+import { wrapText, makeCanvas, canvasTex, drawStatPanel, drawLeakPanel, drawSkyWarn, drawBubble, drawPrompt, drawIcon, rr, FONT, statColor, clamp, lerp } from './util.js';
 
 export const QUALITY = {
   low:    { pr: 1,   shadows: false, shadowSize: 512,  bloom: false, terrainSeg: 70,  mesas: 8,  rocks: 50,  particles: 0.35, shieldSeg: 20, samples: 0 },
@@ -53,6 +53,10 @@ export class World {
     this.sky = [0, 1].map((i) => { const s = spriteFrom(1024, 256, 12, 3, { depthTest: false, order: 40 }); s.visible = false; cam.add(s); return s; });
     this.earthB = spriteFrom(512, 200, 6.6, 2.58, { depthTest: false, order: 41 }); this.earthB.visible = false; cam.add(this.earthB); this.earthT = 0;
     this.prompt = spriteFrom(512, 112, 5.2, 1.14, { depthTest: false, order: 35 }); this.prompt.visible = false; sc.add(this.prompt);
+    this.board = spriteFrom(512, 330, 5.6, 3.6, { depthTest: false, order: 42 }); this.board.visible = false; cam.add(this.board);
+    this.guideMat = new THREE.MeshBasicMaterial({ color: new THREE.Color(0.15, 0.8, 1.0), transparent: true, toneMapped: false, depthWrite: false });
+    this.path = Array.from({ length: 22 }, () => { const m = new THREE.Mesh(new THREE.ConeGeometry(0.2, 0.55, 4), this.guideMat.clone()); m.rotation.order = 'YXZ'; m.visible = false; m.position.y = 0.14; sc.add(m); return m; });
+    this.guideTop = new THREE.Mesh(new THREE.ConeGeometry(0.5, 1.1, 4), new THREE.MeshBasicMaterial({ color: new THREE.Color(0.4, 2.2, 2.6), toneMapped: false })); this.guideTop.rotation.x = Math.PI; this.guideTop.visible = false; sc.add(this.guideTop);
     this.floats = [];
   }
   floatText(text, color, x, y, z) {
@@ -80,6 +84,7 @@ export class World {
     if (this.composer) { this.composer.setPixelRatio(this.renderer.getPixelRatio()); this.composer.setSize(w, h); this.bloom.resolution.set(w / 2, h / 2); }
     const asp = w / h, k = clamp(asp / 1.75, 0.55, 1); this.sky.forEach((s, i) => { s.scale.set(12 * k, 3 * k, 1); s.position.set(0, (asp < 1.5 ? 4.0 : 4.7) - i * 3.1 * k, -14); }); this.earthB.position.set(-4.5 * Math.min(1, asp / 1.6), -3.0 + 5.4, -14); this.earthB.scale.set(6.6 * k, 2.58 * k, 1);
     this.earthB.position.set(-(asp * 3.8) + 3.6 * k, 4.6 - 2.1 * k - 3.3, -14);
+    { const halfH = 14 * Math.tan(this.camera.fov * Math.PI / 360), halfW = halfH * asp, kb = clamp(asp / 1.9, 0.85, 1.2) * (h < 450 ? 1.12 : 1); this.board.scale.set(5.6 * kb, 3.6 * kb, 1); this.board.position.set(-halfW + 2.8 * kb + 0.5, halfH - 1.8 * kb - 0.6, -14); }
   }
   setState(state, playerIdx) {
     this.crew.forEach((c) => c.dispose(this.scene)); this.crew = state.crew.map((c, i) => new CrewView(this.scene, c.id, i === playerIdx, QUALITY[this.geoLevel]));
@@ -124,6 +129,12 @@ export class World {
     // sky warnings
     this.updateSky(state, tm);
     if (this.earthT > 0) { this.earthT -= dt; this.earthB.visible = this.earthT > 0; this.earthB.material.opacity = clamp(this.earthT / 0.6, 0, 1); } else this.earthB.visible = false;
+    // mission board + guide
+    const bd = ctx.board; this.board.visible = !!bd && !title; if (bd && !title) redraw(this.board, bd.title + bd.rows.map((r) => r.state + r.text).join('|'), (g) => drawBoard(g, bd));
+    const gt = ctx.guide && ST[ctx.guide] && !title ? ST[ctx.guide] : null; this.guideTop.visible = !!gt; this.path.forEach((p) => { p.visible = false; });
+    if (gt) { const px = pc.x, pz = pc.z, dx = gt[0] - px, dz = gt[1] - pz, d = Math.hypot(dx, dz); const ux = dx / (d || 1), uz = dz / (d || 1); const n = Math.min(this.path.length, Math.floor((d - 2.6) / 1.6)); const yaw = Math.atan2(ux, uz);
+      for (let i = 0; i < n; i++) { const p = this.path[i]; p.visible = true; p.position.x = px + ux * (2.2 + i * 1.6); p.position.z = pz + uz * (2.2 + i * 1.6); p.rotation.set(Math.PI / 2, yaw, 0); p.material.opacity = 0.25 + 0.7 * Math.max(0, Math.sin(tm * 6 - i * 0.7)); p.scale.setScalar(0.7 + 0.3 * Math.max(0, Math.sin(tm * 6 - i * 0.7))); }
+      this.guideTop.position.set(gt[0], 4.4 + Math.sin(tm * 4) * 0.35, gt[1]); this.guideTop.rotation.y = tm * 2; }
     // prompt
     const pr = ctx.prompt;
     if (pr && !title) { const st = ST[pr.stationId]; if (st) { this.prompt.visible = true; const txt = (pr.enabled ? (this.touch ? 'USE: ' : '[E] Hold: ') : '') + pr.label + (pr.enabled ? '' : (pr.reason ? ' - ' + pr.reason : '')); redraw(this.prompt, txt + pr.enabled, (g) => drawPrompt(g, txt, pr.enabled)); this.prompt.position.set(st[0], 3.4, st[1]); } } else this.prompt.visible = false;
@@ -144,6 +155,17 @@ export class World {
     this.sky.forEach((s, i) => { const l = lines[i]; s.visible = !!l; if (l) { redraw(s, l[0] + l[1], (g) => drawSkyWarn(g, l[0], l[1])); s.material.opacity = 0.82 + 0.18 * Math.sin(tm * 5); } });
   }
   render() { if (this.composer) this.composer.render(); else this.renderer.render(this.scene, this.camera); }
+}
+
+function drawBoard(ctx, bd) {
+  const w = 512, h = 330; ctx.clearRect(0, 0, w, h); rr(ctx, 8, 8, w - 16, h - 16, 26);
+  const g = ctx.createLinearGradient(0, 0, 0, h); g.addColorStop(0, 'rgba(14,60,96,.95)'); g.addColorStop(1, 'rgba(8,36,64,.95)'); ctx.fillStyle = g; ctx.fill();
+  ctx.shadowColor = '#4fe3ff'; ctx.shadowBlur = 16; ctx.strokeStyle = '#6fe8ff'; ctx.lineWidth = 4; ctx.stroke(); ctx.shadowBlur = 0;
+  ctx.fillStyle = '#9fefff'; ctx.font = `900 28px ${FONT}`; ctx.textAlign = 'left'; ctx.fillText(bd.title, 28, 52);
+  bd.rows.forEach((r, i) => { const y = 78 + i * 80; const col = r.state === 'done' ? '#7dff9a' : r.state === 'failed' ? '#ff7a6a' : '#cfeaf5';
+    ctx.strokeStyle = col; ctx.lineWidth = 4; ctx.beginPath(); ctx.arc(52, y + 30, 20, 0, 7); ctx.stroke();
+    if (r.state === 'done') { ctx.lineWidth = 6; ctx.beginPath(); ctx.moveTo(41, y + 30); ctx.lineTo(50, y + 40); ctx.lineTo(65, y + 20); ctx.stroke(); } else if (r.state === 'failed') { ctx.lineWidth = 5; ctx.beginPath(); ctx.moveTo(43, y + 21); ctx.lineTo(61, y + 39); ctx.moveTo(61, y + 21); ctx.lineTo(43, y + 39); ctx.stroke(); }
+    ctx.fillStyle = col; ctx.font = `800 27px ${FONT}`; const ls = wrapText(ctx, r.text, 390).slice(0, 2); ls.forEach((l, k) => ctx.fillText(l, 90, y + 28 + k * 30 - (ls.length > 1 ? 12 : 0))); });
 }
 
 function drawShieldPanel(ctx, lv, power) {

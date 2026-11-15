@@ -52,14 +52,17 @@ export class UI {
       ${last ? '<p style="color:#ff9a7a;font-weight:800">FINAL SOL: expect two dangers at once!</p>' : ''}
       <p>${tip}</p>${ctrl}<div style="margin-top:12px"><button class="btn big" data-go>${first ? 'Start Mission' : 'Start Sol ' + sol}</button></div></div>`, 'shade', (el) => el.querySelector('[data-go]').addEventListener('click', onGo));
   }
-  tally({ sol, sols, summary, earth, onNext }) {
+  tally({ sol, sols, summary, board, fact, earth, onNext }) {
+    const starsHtml = board ? [1, 2, 3].map((i) => `<span class="${i <= board.stars ? '' : 'off'}">&#9733;</span>`).join('') : '';
+    const rowsHtml = board ? board.rows.map((r) => `<div class="stat"><span>${r.state === 'done' ? '&#10003;' : r.state === 'failed' ? '&#10007;' : '&#9675;'} ${r.text}</span><b>${r.state === 'done' ? 'Done' : r.state === 'failed' ? 'Missed' : 'Not yet'}</b></div>`).join('') : '';
+    const factHtml = fact ? `<div class="fact"><b>Real space fact: ${fact.title || ''}</b><br>${fact.text}<br><span class="dim" style="font-size:12px">Source: ${fact.source || 'NASA'}${fact.date ? ', ' + fact.date : ''} <span class="pill arc">ARCHIVED</span></span></div>` : '';
     const ev = (summary.eventsFaced || []).map((t) => (FACTS[t]?.title || t)).join(', ') || 'A quiet day';
     this.show(`<div class="card center" style="max-width:min(560px,94vw)"><div class="dim" style="letter-spacing:.3em;font-weight:800">NIGHT FALLS</div><h2>SOL ${sol} COMPLETE</h2>
-      <div class="stat"><span>Events today</span><b>${ev}</b></div>
+      <div class="stars" style="font-size:38px">${starsHtml}</div>${rowsHtml}<div class="stat"><span>Events today</span><b>${ev}</b></div>
       <div class="stat"><span>Lowest battery</span><b>${Math.round(summary.powerMin ?? 0)}%</b></div>
       <div class="stat"><span>Plants harvested</span><b>${summary.harvested ?? 0}</b></div>
       <div class="stat"><span>Leaks patched</span><b>${summary.patched ?? 0}</b></div>
-      <p class="dim" style="margin-top:10px">${earth ? 'Message from Earth: ' + earth : 'Earth says: good work, crew.'}</p>
+      ${factHtml}<p class="dim" style="margin-top:10px">${earth ? 'Message from Earth: ' + earth : 'Earth says: good work, crew.'}</p>
       <button class="btn big" data-go>${sol >= sols ? 'Finish Mission' : 'Next Sol'}</button></div>`, 'shade', (el) => el.querySelector('[data-go]').addEventListener('click', onNext));
   }
   pause({ onResume, onHow, onSettings, onCredits, onRestart, onQuit, log }) {
@@ -114,7 +117,7 @@ export class UI {
       return `<li><b>Sol ${t.sol}: ${f?.title || t.type}</b> ${src ? `<span class="pill ${real || (flare && flare.real) ? 'arc' : 'game'}">${(flare ? flare.real : real) ? 'ARCHIVED' : 'GAME-MADE'}</span>` : ''}<br>${t.note || ''}<br><span class="dim">${flare ? flare.blurb : (f ? f.text : '')}</span>${src ? `<br><span class="dim" style="font-size:12px">Source: ${src}</span>` : ''}</li>`; }).join('');
     this.show(`<div class="card" style="max-width:min(860px,96vw)"><div class="center"><h2 style="font-size:34px">${won ? 'MISSION COMPLETE!' : 'EARLY RETURN'}</h2>
       ${won ? '' : `<p>${d.failReason || 'The crew went to the rover shelter and came home safely.'}</p><p class="dim">That is okay! Real missions learn from hard days. Your crew gathered data for the next team.</p>`}
-      <div class="stars">${stars}</div></div>
+      ${d.rank ? `<div class="rank"><div class="medal">&#9733;</div><div><b>${d.rank.name}</b><br><span class="dim">${d.rank.desc}</span></div></div>` : ''}<div class="stars">${stars}</div>${(d.hist || []).length ? `<p class="dim">Mission stars per sol: ${d.hist.map((h) => h.sol + ': ' + '&#9733;'.repeat(h.stars) + '&#9734;'.repeat(3 - h.stars)).join(' &nbsp; ')}</p>` : ''}</div>
       <div class="grid2"><div><h3>Mission stats</h3>${rows}</div><div><h3>Badges</h3><div class="badges">${bd}</div></div></div>
       <h3>What you learned</h3><ul class="tl">${(d.lessons || []).map((l) => `<li>${l}</li>`).join('')}</ul>
       <h3>Your mission vs real space weather</h3><ul class="tl">${tl || '<li class="dim">No events were recorded.</li>'}</ul>

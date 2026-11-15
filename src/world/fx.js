@@ -60,7 +60,8 @@ export class FX {
     // task rings (urgent stations)
     this.rings = []; const rm = new THREE.MeshBasicMaterial({ color: new THREE.Color(2.6, 1.3, 0.3), transparent: true, opacity: 0.85, side: THREE.DoubleSide, depthWrite: false, toneMapped: false });
     for (let i = 0; i < 8; i++) { const r = new THREE.Mesh(new THREE.RingGeometry(1.15, 1.35, 36), rm.clone()); r.rotation.x = -Math.PI / 2; r.position.y = 0.09; r.visible = false; scene.add(r); this.rings.push(r); }
-    this.leakRings = {}; ['power', 'med', 'water', 'green'].forEach((id) => { const r = new THREE.Mesh(new THREE.RingGeometry(1.9, 2.3, 40), new THREE.MeshBasicMaterial({ color: new THREE.Color(3, 1.1, 0.2), transparent: true, opacity: 0.9, side: THREE.DoubleSide, depthWrite: false, toneMapped: false })); r.rotation.x = -Math.PI / 2; r.position.set(ST['leak_' + id][0] - 1.0, 0.1, ST['leak_' + id][1] + 0.4); r.visible = false; scene.add(r); this.leakRings[id] = r; });
+    this.leakRings = {}; ['power', 'med', 'water', 'green'].forEach((id) => { const r = new THREE.Mesh(new THREE.RingGeometry(1.9, 2.3, 40), new THREE.MeshBasicMaterial({ color: new THREE.Color(3, 0.22, 0.14), transparent: true, opacity: 0.9, side: THREE.DoubleSide, depthWrite: false, toneMapped: false })); r.rotation.x = -Math.PI / 2; r.position.set(ST['leak_' + id][0] - 1.0, 0.1, ST['leak_' + id][1] + 0.4); r.visible = false; scene.add(r); this.leakRings[id] = r; });
+    this.leakLight = new THREE.PointLight(0xff3a20, 0, 20, 1.4); scene.add(this.leakLight);
     this.acc = { smoke: 0, rad: 0, wind: 0, mote: 0, leak: 0, work: 0, steps: 0 }; this.shake = 0; this.lastRip = 0; this.flareAbsorbed = 0;
     for (let i = 0; i < 40 * this.rs; i++) this.glow.emit((Math.random() - 0.5) * 80, 1 + Math.random() * 8, (Math.random() - 0.5) * 60 - 4, 0.3, 0.1, 0.2, 99999, 0.18, 0.18, 1, 0.8, 0.5, 0.35, 0, 0);
   }
@@ -123,6 +124,7 @@ export class FX {
       if (A.leak > 1) { const mm = MOD[id]; this.dust.emit(mm.x + 1 + (Math.random() - 0.5), 2.3, mm.z + mm.r - 0.6, 0.4 + Math.random() * 0.4, 2.2 + Math.random(), 0.3, 1.8, 0.7, 3.2, 0.9, 0.9, 0.92, 0.5, 0.4, 0);
         if (Math.random() < 0.3) this.glow.emit(mm.x + 1, 2.1, mm.z + mm.r - 0.5, (Math.random() - 0.5) * 3, 2 + Math.random() * 2, 0.6, 0.5, 0.14, 0.03, 1, 0.7, 0.3, 1, 1, 9); } } });
     if (A.leak > 1) A.leak = 0;
+    { const lm = ['power', 'med', 'water', 'green'].find((id) => state.modules[id].leak); if (lm) { const mm = MOD[lm]; this.leakLight.position.set(mm.x + 1, 3.2, mm.z + mm.r + 1.2); this.leakLight.intensity = 30 * (0.5 + 0.5 * Math.sin(tm * 6)); } else this.leakLight.intensity = 0; }
     if (state.recycler.clogged && this.env.recPos && Math.random() < dt * 14) this.dust.emit(this.env.recPos.x, 1.9, this.env.recPos.z, 0.3, 1.8, 0.2, 1.4, 0.4, 2.0, 0.95, 0.95, 0.95, 0.4, 0.5, 0);
     // ---- urgent rings
     this.rings.forEach((r) => { r.visible = false; });

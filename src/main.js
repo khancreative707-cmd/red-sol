@@ -5,7 +5,8 @@ import { Input } from './systems/input.js';
 import { Sound } from './systems/audio.js';
 import { Save } from './systems/save.js';
 import { createGame, tick, release, solInfo, meters, getAction, urgentStations, serialize, restore, buildDebrief } from './sim/sim.js';
-import { FACTS } from './data/archive.js';
+import { FACTS, FLARE_VARIANTS } from './data/archive.js';
+import { ST } from './world/layout.js';
 
 const $ = (s) => document.querySelector(s);
 const touch = matchMedia('(pointer: coarse)').matches || 'ontouchstart' in window;
@@ -29,6 +30,48 @@ input.onPause = () => { if (G.mode === 'game' && !G.card && !G.over) { if (G.pau
 
 const startAudio = () => { sound.start(); window.removeEventListener('pointerdown', startAudio); window.removeEventListener('keydown', startAudio); };
 window.addEventListener('pointerdown', startAudio); window.addEventListener('keydown', startAudio);
+
+// ---------- mission board (3 objectives per sol) ----------
+const OBJ_TEXT = { clean: 'Clean a dusty solar panel', patch: 'Patch the hull leak', fold: 'Fold all 3 panels before the dust hits', dose: 'Keep your radiation dose low in the flare', fix: 'Fix the water recycler', call: 'Call Earth for advice', harvest: 'Harvest 2 ripe crops', power: 'Keep the battery above 25%' };
+function initBoard(st) {
+  const sch = (st.sched[st.sol - 1] || []).map((e) => e.type); const map = { storm: 'fold', flare: 'dose', meteor: 'patch', clog: 'fix', geomag: 'call' };
+  let ids = st.sol === 1 ? ['clean', 'patch', 'fold'] : [];
+  if (!ids.length) { for (const t of sch) { const o = map[t]; if (o && !ids.includes(o) && ids.length < 3) ids.push(o); } for (const o of ['harvest', 'clean', 'power']) if (ids.length < 3 && !ids.includes(o)) ids.push(o); }
+  const S = st.stats; const hist = st.board && st.board.hist ? st.board.hist : [];
+  st.board = { sol: st.sol, ids, hist, clean: 0, patch: 0, fix: 0, base: { folded: S.stormsFolded, calls: S.earthCalls, flares: S.flaresFaced, dose0: st.crew[st.playerIdx].dose } };
+}
+function objState(st, id) {
+  const b = st.board, B = b.base, S = st.stats, ss = st.solStats || {}, me = st.crew[st.playerIdx];
+  switch (id) {
+    case 'clean': return b.clean >= 1 ? 'done' : 'open';
+    case 'patch': return b.patch >= 1 ? 'done' : 'open';
+    case 'fix': return b.fix >= 1 ? 'done' : 'open';
+    case 'fold': return S.stormsFolded > B.folded ? 'done' : 'open';
+    case 'call': return S.earthCalls > B.calls ? 'done' : 'open';
+    case 'harvest': return (ss.harvested || 0) >= 2 ? 'done' : 'open';
+    case 'dose': { const d = (me.dose - B.dose0) / 60 * 100; if (d >= 25) return 'failed'; return S.flaresFaced > B.flares ? 'done' : 'open'; }
+    case 'power': { if ((ss.powerMin ?? 100) < 25) return 'failed'; return st.t >= 140 ? 'done' : 'open'; }
+    default: return 'open';
+  }
+}
+function boardData(st) { if (!st.board || st.board.sol !== st.sol) initBoard(st); return { title: 'MISSION BOARD  -  SOL ' + st.sol, rows: st.board.ids.map((id) => ({ text: OBJ_TEXT[id], state: objState(st, id) })) }; }
+function guideTarget(st) {
+  if (st.sol !== 1 || st.hold || !st.board) return null; const me = st.crew[st.playerIdx];
+  for (const id of st.board.ids) {
+    if (objState(st, id) === 'done') continue;
+    if (id === 'clean') { let bi = -1, bd = 0.2; st.panels.forEach((p, i) => { if (p.dust > bd) { bd = p.dust; bi = i; } }); if (bi >= 0) return 'panel' + bi; }
+    if (id === 'patch') { const lm = ['power', 'med', 'water', 'green'].find((m) => st.modules[m].leak); if (lm) return me.carry ? 'leak_' + lm : 'storage'; }
+    if (id === 'fold' && st.events.some((e) => e.type === 'storm')) { let best = null, bd = 1e9; st.panels.forEach((p, i) => { if (!p.folded) { const d = Math.hypot(me.x - ST['panel' + i][0], me.z - ST['panel' + i][1]); if (d < bd) { bd = d; best = 'panel' + i; } } }); if (best) return best; }
+  }
+  return st.plots.some((p) => p.g >= 1) ? 'greenhouse' : null;
+}
+function rankFor(d, st) {
+  const hist = (st.board && st.board.hist) || []; const got = hist.reduce((a, h) => a + h.stars, 0), max = Math.max(1, st.sols * 3); const pct = got / max;
+  if (d.status !== 'won') return { name: 'Mars Trainee', desc: 'You gathered data for the next crew.', pct };
+  if (pct >= 0.75) return { name: 'Mars Commander', desc: 'You finished most of your missions every sol.', pct };
+  if (pct >= 0.45) return { name: 'Mars Pilot', desc: 'Great teamwork. Try for more mission stars!', pct };
+  return { name: 'Junior Astronaut', desc: 'You survived Mars! Complete more objectives next time.', pct };
+}
 
 // ---------- reliability ----------
 let errShown = false;
@@ -63,7 +106,7 @@ function continueGame() {
   const s = Save.load(); if (!s) return toTitle();
   try { G.state = restore(s.json); } catch { Save.clear(); return toTitle(); }
   G.crewId = s.crewId; G.sols = s.sols; G.hintsDone = new Set(['1', '2', '3']); G.over = false; G.lastEarth = '';
-  beginPlay(); const st = G.state;
+  beginPlay(); const st = G.state; if (!st.board || st.board.sol !== st.sol) initBoard(st);
   if (st.status !== 'playing') { Save.clear(); return toTitle(); }
   if (st.hold === 'briefing') showBriefing(st.sol); else if (st.hold === 'tally') showTally(st.solStats ? summaryFrom(st) : {}); else { G.paused = true; showPauseMenu(); }
 }
@@ -82,9 +125,11 @@ function showBriefing(sol) {
   const tip = sol === 1 ? `Welcome to Mars! A ${T.sol} is one Mars day. Your crew must survive ${G.sols} of them. Every choice helps one thing and costs another.` : TIPS[(sol * 3 + G.state.seed) % TIPS.length]();
   ui.briefing({ sol, sols: G.sols, tip, first: sol === 1, touch, last: sol === G.sols && G.sols > 1, onGo: () => { release(G.state); ui.clear(); G.card = false; input.setEnabled(true); save(); } });
 }
-function showTally(summary) {
+function showTally(summary, board) {
   G.card = true; input.setEnabled(false); const st = G.state;
-  ui.tally({ sol: st.sol, sols: G.sols, summary, earth: G.lastEarth, onNext: () => { release(G.state); ui.clear(); G.card = true; } });
+  if (!board) { const b = boardData(st); board = { rows: b.rows, stars: b.rows.filter((r) => r.state === 'done').length }; }
+  const ft = (summary.eventsFaced || []).map((t) => ({ ...FACTS[t], t })).find((f) => f.text && f.t !== 'geomag') || FACTS.sol;
+  ui.tally({ sol: st.sol, sols: G.sols, summary, board, fact: ft, earth: G.lastEarth, onNext: () => { release(G.state); ui.clear(); G.card = true; } });
 }
 function showPauseMenu() {
   ui.pause({ log: G.state.log, onResume: doResume, onHow: () => ui.howto(touch, showPauseMenu), onSettings: () => openSettings(showPauseMenu), onCredits: () => ui.credits(showPauseMenu),
@@ -98,7 +143,7 @@ window.addEventListener('pagehide', save);
 
 function gameOver(status) {
   if (G.over) return; G.over = true; input.setEnabled(false); pauseBtn.style.display = 'none';
-  const d = buildDebrief(G.state); const meta = Save.meta(); meta.runs++; if (status === 'won') meta.wins++; meta.bestStars = Math.max(meta.bestStars, d.stars);
+  const d = buildDebrief(G.state); d.rank = rankFor(d, G.state); d.hist = (G.state.board && G.state.board.hist) || []; const meta = Save.meta(); meta.runs++; if (status === 'won') meta.wins++; meta.bestStars = Math.max(meta.bestStars, d.stars);
   meta.badges = Array.from(new Set([...(meta.badges || []), ...d.badges.map((b) => b.id)])); if (status !== 'won') meta.perkKits = Math.min(2, (meta.perkKits || 0) + 1); Save.setMeta(meta); Save.finish();
   if (status === 'won') sound.fanfare(); else sound.sad();
   setTimeout(() => { G.card = true; ui.debrief(d, { onAgain: () => startGame(G.crewId, G.sols), onChange: () => toSelect(G.sols), onCredits: () => ui.credits(() => gameOver2(d)) }); }, status === 'won' ? 600 : 1500);
@@ -110,17 +155,18 @@ function playerPos() { const c = G.state.crew[G.state.playerIdx]; return c; }
 function handle(ev) {
   const st = G.state;
   switch (ev.type) {
-    case 'sol_start': showBriefing(ev.sol); break;
-    case 'sol_end': if (st.status === 'playing') { showTally(ev.summary || {}); save(); } break;
+    case 'sol_start': initBoard(st); showBriefing(ev.sol); break;
+    case 'sol_end': if (st.status === 'playing') { const b = boardData(st); const stars = b.rows.filter((r) => r.state === 'done').length; st.board.hist.push({ sol: st.sol, stars }); showTally(ev.summary || {}, { rows: b.rows, stars }); save(); } else { const b = boardData(st); st.board.hist.push({ sol: st.sol, stars: b.rows.filter((r) => r.state === 'done').length }); } break;
     case 'event_warn': { const t = ev.ev.type; if (t === 'flare') { world.sunFlash = 1; sound.alarm(); } else if (t === 'storm') { sound.alarm(); sound.whoosh(); } else if (t === 'meteor') sound.whoosh(); save(); break; }
     case 'event_start': { const t = ev.ev.type; if (t === 'flare' || t === 'storm') sound.alarm(); if (t === 'clog') sound.bad(); break; }
     case 'meteor_strike': world.fx.strike(ev.x, ev.z, 3); sound.impact(); break;
     case 'earth_msg': world.showEarth(ev.text); G.lastEarth = ev.text.replace(/^Earth: /, ''); sound.call(); break;
     case 'harvest': { const c = st.crew[ev.crew]; world.floatText('+' + (ev.n * 9 || 9) + ' food', '#7dff9a', c.x, 3.4, c.z); sound.done(); break; }
-    case 'patched': { const c = st.crew[ev.crew]; world.floatText('Leak patched!', '#7aeaff', c.x, 3.4, c.z); sound.ok(); break; }
+    case 'patched': { if (st.board) st.board.patch++; const c = st.crew[ev.crew]; world.floatText('Leak patched!', '#7aeaff', c.x, 3.4, c.z); sound.ok(); break; }
     case 'toast': { const c = playerPos(); world.floatText(ev.text, '#ffe9c8', c.x, 4.2, c.z); break; }
-    case 'task_done': { if (ev.crew === st.playerIdx) sound.done(); break; }
+    case 'task_done': { if (ev.actionId === 'clean' && st.board) st.board.clean++; if (ev.crew === st.playerIdx) sound.done(); break; }
     case 'say': sound.tone(900 + ev.crew * 120, 0.06, 'sine', 0.04); break;
+    case 'event_end': if (ev.ev && ev.ev.type === 'clog' && ev.result === 'fixed' && st.board) st.board.fix++; break;
     case 'game_over': gameOver(ev.status); break;
     default: break;
   }
@@ -130,6 +176,11 @@ function hints(st) {
   for (const [k, at, who, text] of H) if (!G.hintsDone.has(k) && t >= at) { G.hintsDone.add(k); const c = st.crew[who]; if (!c.say) c.say = { text, t: 6 }; }
 }
 
+// ---------- debug keys (add ?debug to the URL): 1 storm, 2 flare, 3 meteor, 4 recycler clog, 5 radio storm, 6 dust devil ----------
+if (/[?&]debug/.test(location.search)) {
+  const DEF = { Digit1: { type: 'storm' }, Digit2: { type: 'flare', intensity: 2, variant: FLARE_VARIANTS.find((v) => v.intensity === 2) }, Digit3: { type: 'meteor' }, Digit4: { type: 'clog' }, Digit5: { type: 'geomag' }, Digit6: { type: 'devil' } };
+  window.addEventListener('keydown', (e) => { const d = DEF[e.code]; const st = G.state; if (!d || e.repeat || G.mode !== 'game' || st.hold || G.paused) return; const sch = st.sched[st.sol - 1]; if (!sch) return; sch.splice(st.evPtr, 0, Object.assign({ at: st.t }, d)); const c = st.crew[st.playerIdx]; if (!c.say) c.say = { text: 'DEBUG: ' + d.type, t: 2 }; });
+}
 // ---------- main loop ----------
 let last = performance.now(), first = true;
 function frame(now) {
@@ -142,7 +193,7 @@ function frame(now) {
     } else if (G.paused) dt = 0;
     const info = solInfo(st), m = meters(st);
     const prompt = G.mode === 'game' && !G.paused && !st.hold ? getAction(st, st.playerIdx) : null;
-    world.update(st, G.mode === 'title' ? dt : dt, { info, meters: m, prompt, urgent: G.mode === 'game' && !st.hold ? urgentStations(st) : [] });
+    const live = G.mode === 'game' && !st.hold && !G.paused && !G.over; world.update(st, dt, { info, meters: m, prompt, board: live ? boardData(st) : null, guide: live ? guideTarget(st) : null, urgent: G.mode === 'game' && !st.hold ? urgentStations(st) : [] });
     world.perf(Math.max(dt, 0.001)); world.render();
     // screen tint for radiation / storm
     const fl = st.weather.flare > 0.3, sm = st.weather.storm > 0.7; const key = (fl ? 'f' : '') + (sm ? 's' : ''); if (key !== G.flashKey) { G.flashKey = key; const f = $('#flash'); f.className = fl ? 'on' : sm ? 'on dust' : ''; }

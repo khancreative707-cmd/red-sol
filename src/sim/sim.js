@@ -110,9 +110,10 @@ function makeSchedule(s) {
     }
     return { type: 'flare', intensity: I, variant: pickVariant(s, I) };
   };
-  sched[0].push({ type: 'devil', at: 70 });
+  // Sol 1 is the guided tutorial: hull leak by ~42 s, dust storm hits ~100 s, gentle dust devil at the end
+  sched[0].push({ type: 'meteor', at: 36 }, { type: 'storm', at: 55 }, { type: 'devil', at: 128 });
   if (N >= 2) {
-    sched[N - 1].push({ type: 'storm', at: 25 }, Object.assign(flareDef(N - 1, 3), { at: 70 }));
+    sched[N - 1].push({ type: 'storm', at: 15 }, Object.assign(flareDef(N - 1, 3), { at: 58 }));
   }
   const mids = []; for (let i = 1; i < N - 1; i++) mids.push(i);
   if (mids.length) {
@@ -124,7 +125,7 @@ function makeSchedule(s) {
     });
     const pool = [['storm', 1], ['flare', 1], ['meteor', 1.5], ['clog', 1], ['geomag', 1], ['devil', 0.7]];
     for (const idx of mids) {
-      if (sched[idx].length < 2 && rnd(s) < 0.5) {
+      while (sched[idx].length < 2) {
         const have = new Set(sched[idx].map(e => e.type));
         const opts = pool.filter(p => !have.has(p[0]));
         const tot = opts.reduce((a, p) => a + p[1], 0);
@@ -134,8 +135,8 @@ function makeSchedule(s) {
       }
       const n = sched[idx].length;
       const sh = shuffle(s, sched[idx]);
-      const t1 = rndRange(s, 22, 36);
-      sh.forEach((e, j) => { e.at = j === 0 ? t1 : t1 + 36 + rnd(s) * 20; });
+      const t1 = rndRange(s, 10, 18);
+      sh.forEach((e, j) => { e.at = j === 0 ? t1 : t1 + 38 + rnd(s) * 14; });
       sched[idx] = sh;
     }
   }
