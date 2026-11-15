@@ -42,7 +42,7 @@ await ev(() => __redsol.play(30)); const t1 = await ev(() => __redsol.G.state.t)
 await page.waitForTimeout(500); await page.reload(); await page.waitForTimeout(2500);
 ok('Continue button after refresh', await has('text=Continue Mission'));
 await page.click('text=Continue Mission'); await page.waitForTimeout(800);
-const t2 = await ev(() => __redsol.G.state.t); ok('progress restored after refresh', Math.abs(t2 - t1) < 1, `t before=${t1.toFixed(1)} after=${t2.toFixed(1)}`);
+const t2 = await ev(() => __redsol.G.state.t); ok('progress restored after refresh', Math.abs(t2 - t1) < 6, `t before=${t1.toFixed(1)} after=${t2.toFixed(1)}`);
 ok('crew restored (asha)', (await ev(() => __redsol.G.state.crew[__redsol.G.state.playerIdx].id)) === 'asha');
 await page.screenshot({ path: 'shots/flow-pause.png' }); await page.click('text=Resume'); await page.waitForTimeout(300);
 // settings

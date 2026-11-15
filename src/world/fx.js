@@ -62,8 +62,8 @@ export class FX {
     for (let i = 0; i < 8; i++) { const r = new THREE.Mesh(new THREE.RingGeometry(1.15, 1.35, 36), rm.clone()); r.rotation.x = -Math.PI / 2; r.position.y = 0.09; r.visible = false; scene.add(r); this.rings.push(r); }
     this.leakRings = {}; ['power', 'med', 'water', 'green'].forEach((id) => { const r = new THREE.Mesh(new THREE.RingGeometry(1.9, 2.3, 40), new THREE.MeshBasicMaterial({ color: new THREE.Color(3, 0.22, 0.14), transparent: true, opacity: 0.9, side: THREE.DoubleSide, depthWrite: false, toneMapped: false })); r.rotation.x = -Math.PI / 2; r.position.set(ST['leak_' + id][0] - 1.0, 0.1, ST['leak_' + id][1] + 0.4); r.visible = false; scene.add(r); this.leakRings[id] = r; });
     this.leakLight = new THREE.PointLight(0xff3a20, 0, 20, 1.4); scene.add(this.leakLight);
+    this.fw = new THREE.Vector3(); this.rsMul = 1;
     this.acc = { smoke: 0, rad: 0, wind: 0, mote: 0, leak: 0, work: 0, steps: 0 }; this.shake = 0; this.lastRip = 0; this.flareAbsorbed = 0;
-    for (let i = 0; i < 40 * this.rs; i++) this.glow.emit((Math.random() - 0.5) * 80, 1 + Math.random() * 8, (Math.random() - 0.5) * 60 - 4, 0.3, 0.1, 0.2, 99999, 0.18, 0.18, 1, 0.8, 0.5, 0.35, 0, 0);
   }
   puff(x, y, z, n = 3, s = 1, r = 0.86, g = 0.55, b = 0.34) { for (let i = 0; i < n; i++) this.dust.emit(x + (Math.random() - 0.5) * 0.5, y, z + (Math.random() - 0.5) * 0.5, (Math.random() - 0.5) * 1.2, 0.5 + Math.random() * 0.8, (Math.random() - 0.5) * 1.2, 0.9 + Math.random() * 0.6, 0.35 * s, 1.5 * s, r, g, b, 0.55, 1.5, -0.2); }
   sparks(x, y, z, n, r, g, b, spd = 4) { for (let i = 0; i < n; i++) this.glow.emit(x, y, z, (Math.random() - 0.5) * spd, Math.random() * spd * 0.9, (Math.random() - 0.5) * spd, 0.4 + Math.random() * 0.5, 0.16, 0.04, r, g, b, 1, 1.0, 9); }
@@ -76,7 +76,7 @@ export class FX {
   radHit(x, y, z) { this.sparks(x, y, z, 3, 0.8, 0.7, 1, 3); const now = performance.now(); if (now - this.lastRip > 120) { this.lastRip = now; this.env.addRipple(x, y, z); } }
   update(state, dt, tm, ctx, crewViews) {
     const cam = this.camera; this.uScale.value = this.renderer.domElement.height / (2 * Math.tan(cam.fov * Math.PI / 360));
-    const storm = state.weather.storm, flare = state.weather.flare || 0, A = this.acc, rs = this.rs; const cp = cam.position;
+    const storm = state.weather.storm, flare = state.weather.flare || 0, A = this.acc, rs = this.rs * (this.rsMul ?? 1); const cp = cam.position;
     // ---- storm wall
     const wp = this.wall.geometry.attributes.position.array, ws = this.wall.geometry.attributes.aSize.array, wc = this.wall.geometry.attributes.aColor.array;
     const u = clamp(storm, 0, 1); this.wall.visible = u > 0.01;
@@ -91,7 +91,12 @@ export class FX {
       const g = this.wall.geometry.attributes; g.position.needsUpdate = g.aSize.needsUpdate = g.aColor.needsUpdate = true;
     }
     // wind streaks
-    if (u > 0.5) { A.wind += dt * 420 * rs * (u - 0.4); while (A.wind > 1) { A.wind--; const x = cp.x + (Math.random() - 0.5) * 70 - 14, y = 0.5 + Math.random() * 16, z = cp.z - 40 + Math.random() * 60 - 30; this.dust.emit(x, y, z, 24 + Math.random() * 8, -0.3, 34 + Math.random() * 10, 1.3, 0.5, 0.9, 0.72, 0.45, 0.25, 0.5, 0, 0); } }
+    // sideways dust streaming across the screen (relative to the camera view)
+    { cam.getWorldDirection(this.fw); const fx = this.fw.x, fz = this.fw.z, fl = Math.hypot(fx, fz) || 1; const nx = fx / fl, nz = fz / fl, rx = -nz, rz = nx;
+      if (u > 0.35) { A.wind += dt * 380 * rs * (u - 0.25); while (A.wind > 1) { A.wind--; const fwd = 6 + Math.random() * 34, side = -42 + Math.random() * 24, y = 0.4 + Math.random() * 14; const sp = 38 + Math.random() * 14;
+        this.dust.emit(cp.x + nx * fwd + rx * side, y, cp.z + nz * fwd + rz * side, rx * sp + nx * 7, -0.2, rz * sp + nz * 7, 1.9, 0.55, 1.0, 0.74, 0.46, 0.26, 0.55, 0, 0); } }
+      // low-count drifting dust (always on)
+      A.mote2 = (A.mote2 || 0) + dt * 7 * rs; while (A.mote2 > 1) { A.mote2--; this.dust.emit(cp.x + (Math.random() - 0.5) * 60, 0.4 + Math.random() * 7, cp.z - 6 + (Math.random() - 0.5) * 50, 1.4 + Math.random(), 0.12, 0.6, 9, 0.35, 0.55, 0.96, 0.74, 0.52, 0.24, 0, 0); } }
     // ambient motes (slow)
     // ---- flare / radiation
     const lv = state.shield; if (flare > 0.05) {

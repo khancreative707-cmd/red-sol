@@ -13,7 +13,7 @@ import { wrapText, makeCanvas, canvasTex, drawStatPanel, drawLeakPanel, drawSkyW
 export const QUALITY = {
   low:    { pr: 1,   shadows: false, shadowSize: 512,  bloom: false, terrainSeg: 70,  mesas: 8,  rocks: 50,  particles: 0.35, shieldSeg: 20, samples: 0 },
   medium: { pr: 1.5, shadows: true,  shadowSize: 1024, bloom: true,  terrainSeg: 100, mesas: 12, rocks: 100, particles: 0.65, shieldSeg: 28, samples: 0 },
-  high:   { pr: 2,   shadows: true,  shadowSize: 2048, bloom: true,  terrainSeg: 130, mesas: 14, rocks: 150, particles: 1,    shieldSeg: 36, samples: 4 },
+  high:   { pr: 1.5, shadows: true,  shadowSize: 2048, bloom: true,  terrainSeg: 130, mesas: 14, rocks: 150, particles: 1,    shieldSeg: 36, samples: 4 },
 };
 const ORDER = ['low', 'medium', 'high'];
 
@@ -36,7 +36,7 @@ export class World {
     this.yaw = 0; this.pitch = 0.22; this.dist = touch ? 10.5 : 9.5; this.camPos = new THREE.Vector3(0, 5, 16); this.focus = new THREE.Vector3(0, 0, 6); this.look = new THREE.Vector3(0, 1.5, 0);
     this.crew = []; this.tm = 0; this.sunFlash = 0; this.perfT = 0; this.perfN = 0; this.perfAcc = 0; this.slowFor = 0; this.titleAngle = 0.4; this.mode2 = 'title';
     this.buildHolo();
-    this.composer = null; this.bloom = null; this.applyLevel(this.level, true);
+    this.composer = null; this.bloom = null; this.stage = 0; this.applyStage(this.mode === 'low' ? 3 : 0, true);
     this.resize(); window.addEventListener('resize', () => this.resize());
   }
   buildHolo() {
@@ -65,20 +65,22 @@ export class World {
     this.floats.push({ s, t, life: 1.6 }); if (this.floats.length > 8) { const o = this.floats.shift(); this.scene.remove(o.s); o.t.dispose(); o.s.material.dispose(); }
   }
   showEarth(text) { drawBubble(this.earthB.userData.c.getContext('2d'), 'earth', 'earth', 'EARTH', text); this.earthB.userData.t.needsUpdate = true; this.earthB.userData.key = text; this.earthT = 9; }
-  applyLevel(level, first) {
-    this.level = level; const q = QUALITY[level], r = this.renderer;
-    r.setPixelRatio(Math.min(window.devicePixelRatio || 1, q.pr));
-    const wantShadow = q.shadows && QUALITY[this.geoLevel].shadows; if (r.shadowMap.enabled !== wantShadow || first) { r.shadowMap.enabled = wantShadow; this.env.sunL.castShadow = wantShadow; this.scene.traverse((o) => { if (o.material) { const m = Array.isArray(o.material) ? o.material : [o.material]; m.forEach((x) => { x.needsUpdate = true; }); } }); }
-    if (q.bloom) { if (!this.composer) this.makeComposer(q); this.bloom.enabled = true; } else this.composer = null;
-    this.resize(); this.fx.rs = q.particles >= 0.65 ? this.fx.rs : Math.min(this.fx.rs, 0.4);
+  // Adaptive quality stages (when fps drops): 0 full -> 1 no shadows -> 2 no bloom -> 3 fewer particles + pixel ratio 1
+  stageFeatures(stage) { const g = QUALITY[this.geoLevel]; const S = [{ shadows: true, bloom: true, particles: 1, pr: 1.5 }, { shadows: false, bloom: true, particles: 1, pr: 1.5 }, { shadows: false, bloom: false, particles: 1, pr: 1.5 }, { shadows: false, bloom: false, particles: 0.4, pr: 1 }][Math.min(3, stage)]; return { shadows: S.shadows && g.shadows, bloom: S.bloom && g.bloom, particles: S.particles, pr: S.pr }; }
+  applyStage(stage, first) {
+    this.stage = stage; const f = this.stageFeatures(stage), r = this.renderer;
+    r.setPixelRatio(Math.min(window.devicePixelRatio || 1, f.pr));
+    if (r.shadowMap.enabled !== f.shadows || first) { r.shadowMap.enabled = f.shadows; this.env.sunL.castShadow = f.shadows; this.scene.traverse((o) => { if (o.material) { const m = Array.isArray(o.material) ? o.material : [o.material]; m.forEach((x) => { x.needsUpdate = true; }); } }); }
+    if (f.bloom) { if (!this.composer) this.makeComposer(QUALITY[this.geoLevel]); this.bloom.enabled = true; } else this.composer = null;
+    this.fx.rsMul = f.particles; this.resize();
   }
   makeComposer(q) {
     const r = this.renderer; const rt = new THREE.WebGLRenderTarget(4, 4, { type: THREE.HalfFloatType, samples: q.samples });
     this.composer = new EffectComposer(r, rt); this.composer.addPass(new RenderPass(this.scene, this.camera));
-    this.bloom = new UnrealBloomPass(new THREE.Vector2(256, 256), 0.5, 0.65, 0.84); this.composer.addPass(this.bloom); this.composer.addPass(new OutputPass());
-    this.composer.addPass(new ShaderPass({ uniforms: { tDiffuse: { value: null } }, vertexShader: 'varying vec2 vUv; void main(){ vUv = uv; gl_Position = projectionMatrix*modelViewMatrix*vec4(position,1.0); }', fragmentShader: 'uniform sampler2D tDiffuse; varying vec2 vUv; void main(){ vec4 c = texture2D(tDiffuse, vUv); vec2 d = vUv - 0.5; float v = smoothstep(0.9, 0.3, length(d*vec2(1.15,1.0))); c.rgb *= mix(0.7, 1.0, v); float l = dot(c.rgb, vec3(0.299,0.587,0.114)); c.rgb = mix(vec3(l), c.rgb, 1.14); c.rgb *= vec3(1.04,1.0,0.94); c.rgb = (c.rgb - 0.5)*1.07 + 0.5; gl_FragColor = c; }' }));
+    this.bloom = new UnrealBloomPass(new THREE.Vector2(256, 256), 0.42, 0.5, 0.93); this.composer.addPass(this.bloom); this.composer.addPass(new OutputPass());
+    this.composer.addPass(new ShaderPass({ uniforms: { tDiffuse: { value: null } }, vertexShader: 'varying vec2 vUv; void main(){ vUv = uv; gl_Position = projectionMatrix*modelViewMatrix*vec4(position,1.0); }', fragmentShader: 'uniform sampler2D tDiffuse; varying vec2 vUv; void main(){ vec4 c = texture2D(tDiffuse, vUv); vec2 d = vUv - 0.5; float v = smoothstep(0.9, 0.3, length(d*vec2(1.15,1.0))); c.rgb *= mix(0.7, 1.0, v); float l = dot(c.rgb, vec3(0.299,0.587,0.114)); c.rgb = mix(vec3(l), c.rgb, 1.14); c.rgb = mix(c.rgb * vec3(1.1, 0.92, 0.8), c.rgb, smoothstep(0.0, 0.55, l)); c.rgb *= vec3(1.04,1.0,0.94); c.rgb = (c.rgb - 0.5)*1.07 + 0.5; gl_FragColor = c; }' }));
   }
-  setQuality(name) { this.mode = name; this.slowFor = 0; this.applyLevel(name === 'auto' ? (this.level === 'low' ? 'low' : 'medium') : name); }
+  setQuality(name) { this.mode = name; this.slowFor = 0; this.applyStage(name === 'low' ? 3 : 0); }
   resize() {
     const w = window.innerWidth, h = window.innerHeight; this.renderer.setSize(w, h, false); this.camera.aspect = w / h; this.camera.updateProjectionMatrix();
     if (this.composer) { this.composer.setPixelRatio(this.renderer.getPixelRatio()); this.composer.setSize(w, h); this.bloom.resolution.set(w / 2, h / 2); }
@@ -90,10 +92,10 @@ export class World {
     this.crew.forEach((c) => c.dispose(this.scene)); this.crew = state.crew.map((c, i) => new CrewView(this.scene, c.id, i === playerIdx, QUALITY[this.geoLevel]));
     this.playerIdx = playerIdx; this.fx.craters.forEach((c) => this.scene.remove(c)); this.fx.craters.length = 0;
   }
-  perf(dt) { // adaptive quality (auto mode)
+  perf(dt) { // adaptive quality (auto mode): step down one stage after 2 slow checks
     if (this.mode !== 'auto' || this.mode2 === 'title') return; this.perfAcc += dt; this.perfN++;
     if (this.perfAcc > 2.5) { const fps = this.perfN / this.perfAcc; this.perfAcc = 0; this.perfN = 0; this.fps = fps;
-      if (fps < 38) { this.slowFor++; if (this.slowFor >= 2) { this.slowFor = 0; const i = ORDER.indexOf(this.level); if (i > 0) this.applyLevel(ORDER[i - 1]); } } else this.slowFor = 0; }
+      if (fps < 38) { this.slowFor++; if (this.slowFor >= 2) { this.slowFor = 0; if (this.stage < 3) this.applyStage(this.stage + 1); } } else this.slowFor = 0; }
   }
   update(state, dt, ctx) {
     this.tm += dt; const tm = this.tm; const info = ctx.info; const pc = state.crew[this.playerIdx]; const title = this.mode2 === 'title';

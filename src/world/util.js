@@ -13,11 +13,16 @@ export const lerp = (a, b, t) => a + (b - a) * t;
 export const clamp = (v, a, b) => Math.min(b, Math.max(a, v));
 
 // Ground is flat around the base so buildings and crew sit on y=0.
+const CRATERS = [[-34, -40, 8, 2.2], [38, -46, 10, 2.6], [2, -64, 12, 3], [-70, -20, 12, 3], [75, -12, 13, 3.2], [55, 24, 9, 2.4], [-52, 26, 9, 2.4], [20, 62, 12, 3]];
 export function groundH(x, z) {
   const d = Math.hypot(x / 46, (z + 1) / 30);
-  const k = smooth(1.0, 2.1, d);
-  if (k <= 0) return 0;
-  return k * (fbm(x * 0.035 + 7, z * 0.035 - 3) * 16 + Math.abs(Math.sin(x * 0.05 + fbm(z * 0.03, x * 0.03) * 4)) * 4);
+  const k = smooth(1.0, 2.1, d), kc = smooth(0.95, 1.5, d);
+  if (kc <= 0) return 0;
+  const dunes = (Math.sin(x * 0.055 + fbm(z * 0.02, x * 0.015) * 5) * 0.5 + 0.5) * 1.5 + fbm(x * 0.05, z * 0.05) * 1.3;
+  const hills = fbm(x * 0.03 + 7, z * 0.03 - 3) * 15 * smooth(1.7, 3.4, d);
+  let h = k * (dunes + hills);
+  for (const [cx, cz, r, dp] of CRATERS) { const q = Math.hypot(x - cx, z - cz) / r; if (q < 1.5) h += kc * ((q < 1 ? -dp * (1 - q * q) : 0) + dp * 0.4 * Math.exp(-Math.pow((q - 1.05) * 4.2, 2))); }
+  return h;
 }
 
 export function mulberry(seed) {
