@@ -2,8 +2,9 @@ import * as THREE from 'three';
 import { CREW_LOOK, makeCanvas, canvasTex, drawWrist, drawBubble, clamp } from './util.js';
 
 const mat = (c, r = 0.55, m = 0.05) => new THREE.MeshStandardMaterial({ color: c, roughness: r, metalness: m });
-const lit = (c) => { const m = mat(c); m.emissive = new THREE.Color(0x3a3028); m.emissiveIntensity = 0.5; return m; };
-const WHITE = lit(0xf6f2ec), WHITE2 = lit(0xe4ddd4), DARK = mat(0x2f2a28, 0.7, 0.2), GREY = mat(0x8a817a, 0.5, 0.4);
+const lit = (c, k = 0.9) => { const m = mat(c, 0.5); m.emissive = new THREE.Color(0x5a5048); m.emissiveIntensity = k; return m; };
+const WHITE = lit(0xffffff), WHITE2 = lit(0xf0ebe4, 0.8), ORANGE = new THREE.MeshStandardMaterial({ color: 0xff7a1a, roughness: 0.5, emissive: 0x6a2a00, emissiveIntensity: 0.5 }), BOOT = mat(0x3a3430, 0.7, 0.2);
+const DARK = mat(0x2a2624, 0.7, 0.2), GREY = mat(0x9a918a, 0.5, 0.4);
 
 let blobTex = null;
 function blob() {
@@ -19,30 +20,41 @@ export class CrewView {
     this.root = new THREE.Group(); scene.add(this.root);
     this.body = new THREE.Group(); this.root.add(this.body);
     const accent = mat(L.accent, 0.5), body = this.body;
-    // torso
-    body.add(part(new THREE.CapsuleGeometry(0.4, 0.5, 4, 12), WHITE, 0, 1.0, 0));
-    const belt = part(new THREE.TorusGeometry(0.4, 0.07, 6, 18), accent, 0, 0.7, 0, false); belt.rotation.x = Math.PI / 2; body.add(belt);
-    const chest = part(new THREE.CylinderGeometry(0.13, 0.13, 0.05, 14), accent, 0, 1.12, 0.4, false); chest.rotation.x = Math.PI / 2; body.add(chest);
-    body.add(part(new THREE.SphereGeometry(0.32, 10, 8), DARK, 0, 0.66, 0, false));
-    // legs
-    this.legs = [-1, 1].map((s) => { const g = new THREE.Group(); g.position.set(s * 0.2, 0.62, 0); body.add(g);
-      g.add(part(new THREE.CapsuleGeometry(0.17, 0.3, 4, 8), WHITE, 0, -0.3, 0)); g.add(part(new THREE.BoxGeometry(0.32, 0.2, 0.46), DARK, 0, -0.62, 0.06)); const k = part(new THREE.TorusGeometry(0.17, 0.04, 5, 10), accent, 0, -0.46, 0, false); k.rotation.x = Math.PI / 2; g.add(k); return g; });
-    // arms
-    this.arms = [-1, 1].map((s) => { const g = new THREE.Group(); g.position.set(s * 0.55, 1.28, 0); body.add(g);
-      g.add(part(new THREE.CapsuleGeometry(0.14, 0.34, 4, 8), WHITE, 0, -0.28, 0)); g.add(part(new THREE.SphereGeometry(0.17, 8, 6), DARK, 0, -0.62, 0.02));
-      const c = part(new THREE.TorusGeometry(0.14, 0.04, 5, 10), accent, 0, -0.44, 0, false); c.rotation.x = Math.PI / 2; g.add(c); g.add(part(new THREE.SphereGeometry(0.19, 8, 6), WHITE2, 0, 0.02, 0)); return g; });
-    // helmet
-    const helm = part(new THREE.SphereGeometry(0.46, 18, 14), WHITE, 0, 1.68, 0); body.add(helm);
-    const neck = part(new THREE.TorusGeometry(0.3, 0.07, 6, 16), GREY, 0, 1.4, 0, false); neck.rotation.x = Math.PI / 2; body.add(neck);
-    this.visorMat = new THREE.MeshStandardMaterial({ color: 0x1b1730, roughness: 0.08, metalness: 0.7, emissive: L.visor, emissiveIntensity: 0.28 });
-    const visor = part(new THREE.SphereGeometry(0.4, 18, 14), this.visorMat, 0, 1.68, 0.12, false); visor.scale.set(1.0, 0.82, 0.78); body.add(visor);
-    const glint = part(new THREE.SphereGeometry(0.07, 8, 6), new THREE.MeshBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0.7 }), -0.16, 1.82, 0.4, false); glint.scale.set(1.6, 0.7, 0.4); body.add(glint);
-    body.add(part(new THREE.CylinderGeometry(0.05, 0.05, 0.12, 6), accent, 0.4, 1.78, 0, false));
-    // backpack
-    body.add(part(new THREE.BoxGeometry(0.72, 0.95, 0.34), WHITE2, 0, 1.08, -0.5));
-    [-1, 1].forEach((s) => body.add(part(new THREE.CylinderGeometry(0.1, 0.1, 0.8, 8), accent, s * 0.42, 1.0, -0.5, false)));
+    // ---- torso (white, rounded) with orange panels ----
+    body.add(part(new THREE.CapsuleGeometry(0.43, 0.5, 6, 16), WHITE, 0, 1.0, 0));
+    const belt = part(new THREE.TorusGeometry(0.43, 0.075, 8, 22), ORANGE, 0, 0.72, 0, false); belt.rotation.x = Math.PI / 2; body.add(belt);
+    [-1, 1].forEach((sd) => { body.add(part(new THREE.BoxGeometry(0.1, 0.42, 0.34), ORANGE, sd * 0.4, 1.05, 0.12, false)); }); // side panels
+    const chest = part(new THREE.BoxGeometry(0.34, 0.26, 0.07), DARK, 0, 1.12, 0.42, false); body.add(chest);
+    this.chestLed = part(new THREE.BoxGeometry(0.22, 0.05, 0.03), new THREE.MeshStandardMaterial({ color: 0x0a2a3a, emissive: 0x35e6ff, emissiveIntensity: 1.6 }), 0, 1.14, 0.46, false); body.add(this.chestLed);
+    body.add(part(new THREE.BoxGeometry(0.34, 0.07, 0.07), accent, 0, 1.03, 0.43, false));
+    body.add(part(new THREE.SphereGeometry(0.34, 12, 10), WHITE2, 0, 0.66, 0, false));
+    // ---- legs: white with orange thigh panel, boots ----
+    this.legs = [-1, 1].map((sd) => { const g = new THREE.Group(); g.position.set(sd * 0.21, 0.62, 0); body.add(g);
+      g.add(part(new THREE.CapsuleGeometry(0.18, 0.3, 4, 10), WHITE, 0, -0.3, 0));
+      g.add(part(new THREE.CylinderGeometry(0.2, 0.2, 0.2, 12), ORANGE, 0, -0.18, 0, false));
+      const k = part(new THREE.SphereGeometry(0.16, 8, 6), ORANGE, 0, -0.5, 0.1, false); k.scale.set(1, 0.7, 0.6); g.add(k);
+      g.add(part(new THREE.BoxGeometry(0.34, 0.2, 0.5), BOOT, 0, -0.64, 0.07)); g.add(part(new THREE.BoxGeometry(0.34, 0.1, 0.2), ORANGE, 0, -0.62, 0.26, false)); return g; });
+    // ---- arms: orange shoulder pad, white sleeve, orange cuff, dark glove ----
+    this.arms = [-1, 1].map((sd) => { const g = new THREE.Group(); g.position.set(sd * 0.58, 1.3, 0); body.add(g);
+      g.add(part(new THREE.CapsuleGeometry(0.15, 0.34, 4, 10), WHITE, 0, -0.28, 0)); g.add(part(new THREE.SphereGeometry(0.24, 12, 8), ORANGE, 0, 0.02, 0));
+      const c = part(new THREE.CylinderGeometry(0.165, 0.165, 0.12, 12), ORANGE, 0, -0.46, 0, false); g.add(c); g.add(part(new THREE.SphereGeometry(0.18, 10, 8), BOOT, 0, -0.64, 0.02));
+      if (sd > 0) g.add(part(new THREE.BoxGeometry(0.2, 0.14, 0.16), DARK, 0, -0.34, 0.14, false)), g.add(part(new THREE.BoxGeometry(0.15, 0.08, 0.02), new THREE.MeshStandardMaterial({ color: 0x0a2a3a, emissive: 0x35e6ff, emissiveIntensity: 1.4 }), 0, -0.34, 0.225, false)); // small wrist screen (AI)
+      return g; });
+    // ---- helmet: big round, glossy dark-gold visor, orange band, accent ear pads ----
+    body.add(part(new THREE.SphereGeometry(0.57, 24, 18), WHITE, 0, 1.8, 0));
+    const neck = part(new THREE.TorusGeometry(0.34, 0.08, 8, 20), GREY, 0, 1.42, 0, false); neck.rotation.x = Math.PI / 2; body.add(neck);
+    this.visorMat = new THREE.MeshStandardMaterial({ color: 0x3a2406, roughness: 0.05, metalness: 0.95, emissive: 0x8a5a14, emissiveIntensity: 0.35 });
+    const visor = part(new THREE.SphereGeometry(0.46, 24, 16), this.visorMat, 0, 1.8, 0.3, false); visor.scale.set(1.0, 0.8, 0.8); body.add(visor);
+    const glint = part(new THREE.SphereGeometry(0.08, 8, 6), new THREE.MeshBasicMaterial({ color: 0xfff2c8, transparent: true, opacity: 0.75 }), -0.2, 1.94, 0.66, false); glint.scale.set(1.8, 0.7, 0.4); body.add(glint);
+    const band = part(new THREE.TorusGeometry(0.575, 0.045, 8, 28, Math.PI), ORANGE, 0, 1.8, 0, false); body.add(band);
+    [-1, 1].forEach((sd) => { const ear = part(new THREE.CylinderGeometry(0.1, 0.1, 0.16, 12), accent, sd * 0.57, 1.8, 0, false); ear.rotation.z = Math.PI / 2; body.add(ear); });
+    // ---- backpack: white with 5 glowing cyan bars on a dark plate ----
+    body.add(part(new THREE.BoxGeometry(0.8, 1.0, 0.4), WHITE2, 0, 1.1, -0.52));
+    body.add(part(new THREE.BoxGeometry(0.84, 0.14, 0.44), ORANGE, 0, 1.62, -0.52, false));
+    [-1, 1].forEach((sd) => body.add(part(new THREE.CylinderGeometry(0.09, 0.09, 0.7, 10), accent, sd * 0.46, 1.05, -0.52, false)));
+    body.add(part(new THREE.BoxGeometry(0.56, 0.76, 0.03), DARK, 0, 1.08, -0.725, false));
     this.bars = [];
-    for (let i = 0; i < 5; i++) { const m = new THREE.MeshStandardMaterial({ color: 0x0a2a3a, emissive: 0x35e6ff, emissiveIntensity: 1.5 }); const b = part(new THREE.BoxGeometry(0.4, 0.07, 0.05), m, 0, 0.76 + i * 0.13, -0.69, false); body.add(b); this.bars.push(m); }
+    for (let i = 0; i < 5; i++) { const m = new THREE.MeshStandardMaterial({ color: 0x0a2a3a, emissive: 0x35e6ff, emissiveIntensity: 1.6 }); const bb = part(new THREE.BoxGeometry(0.44, 0.1, 0.05), m, 0, 0.78 + i * 0.15, -0.75, false); body.add(bb); this.bars.push(m); }
     // carried kit
     this.kit = new THREE.Group(); this.kit.add(part(new THREE.BoxGeometry(0.55, 0.34, 0.38), mat(0xff7a2b), 0, 0, 0, false), part(new THREE.BoxGeometry(0.18, 0.08, 0.4), WHITE, 0, 0.2, 0, false)); this.kit.position.set(0, 1.0, 0.62); this.kit.visible = false; body.add(this.kit);
     // blob + markers
@@ -78,7 +90,7 @@ export class CrewView {
     if (carry) { a0 = a1 = -1.0 + s * 0.08 * swing; }
     if (working) { const p = Math.sin(tm * 13); a0 = -1.25 + p * 0.35; a1 = -0.8 + Math.sin(tm * 13 + 1) * 0.15; }
     this.arms[0].rotation.x += (a0 - this.arms[0].rotation.x) * Math.min(1, dt * 14); this.arms[1].rotation.x += (a1 - this.arms[1].rotation.x) * Math.min(1, dt * 14);
-    const idle = Math.sin(tm * 2 + this.phase) * 0.012;
+    const idle = Math.sin(tm * 2 + this.phase) * 0.018; this.body.scale.y = 1 + Math.sin(tm * 2 + this.phase) * 0.012 * (1 - clamp(sp / 2, 0, 1));
     this.body.position.y = Math.abs(s) * 0.07 * swing + idle;
     const lean = working ? 0.28 : sp > 6 ? 0.2 : 0; this.body.rotation.x += (lean - this.body.rotation.x) * Math.min(1, dt * 8);
     this.body.rotation.z = Math.sin(this.phase * 0.5) * 0.04 * swing;
