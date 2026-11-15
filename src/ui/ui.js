@@ -23,24 +23,24 @@ export class UI {
     el.addEventListener('click', (e) => { if (e.target.closest('button')) this.sound.click(); });
     if (bind) bind(el); const first = el.querySelector('.btn'); if (first) setTimeout(() => first.focus({ preventScroll: true }), 50); return el;
   }
-  title({ hasSave, onNew, onQuick, onContinue, onHow, onCredits, onSettings }) {
+  title({ hasSave, onNew, onQuick, onDaily, onContinue, onHow, onCredits, onSettings }) {
     this.show(`<div class="center" style="width:100%">
       <div class="logo">RED SOL</div><div class="sub">Mars Outpost Trainer</div>
       <div class="col menu">
         ${hasSave ? '<button class="btn big" data-a="cont">Continue Mission</button>' : ''}
         <button class="btn ${hasSave ? 'alt' : 'big'}" data-a="new">${hasSave ? 'New Mission (7 sols)' : 'Play (7 sols)'}</button>
-        <button class="btn alt" data-a="quick">Quick Mission (4 sols)</button>
+        <div class="row"><button class="btn alt" data-a="quick">Quick Mission (4 sols)</button><button class="btn alt" data-a="daily">Daily Mission</button></div>
         <div class="row"><button class="btn alt" data-a="how">How to Play</button><button class="btn alt" data-a="set">Settings</button><button class="btn alt" data-a="cred">Data &amp; Credits</button></div>
       </div>
       <div class="team">TEAM REZONX ELITES</div>
     </div><div class="corner">NASA Space Apps Challenge 2026 &middot; Built with AI assistance (Claude) &middot; Not made or endorsed by NASA</div>`, '', (el) => {
-      el.addEventListener('click', (e) => { const a = e.target.closest('button')?.dataset.a; if (!a) return; ({ cont: onContinue, new: onNew, quick: onQuick, how: onHow, cred: onCredits, set: onSettings })[a]?.(); });
+      el.addEventListener('click', (e) => { const a = e.target.closest('button')?.dataset.a; if (!a) return; ({ cont: onContinue, new: onNew, quick: onQuick, daily: onDaily, how: onHow, cred: onCredits, set: onSettings })[a]?.(); });
     });
   }
-  select({ sols, onPick, onBack }) {
+  select({ sols, daily, onPick, onBack }) {
     const cards = Object.keys(CREW_LOOK).map((id) => { const L = CREW_LOOK[id], tx = CREW_TEXT[id];
       return `<button class="pick" data-id="${id}"><canvas width="120" height="120" data-p="${id}"></canvas><b>${L.name}</b><div class="role">${L.role}</div><div class="good">+ ${tx.good}</div><div class="bad">- ${tx.bad}</div></button>`; }).join('');
-    this.show(`<div class="center card" style="max-width:min(960px,96vw)"><h2>Choose your astronaut</h2><p class="dim">You play as one. The other two crewmates work on their own. Mission: <b>${sols} sols</b>.</p><div class="crew">${cards}</div><button class="btn alt" data-back>Back</button></div>`, 'shade', (el) => {
+    this.show(`<div class="center card" style="max-width:min(960px,96vw)"><h2>Choose your astronaut</h2><p class="dim">You play as one. The other two crewmates work on their own. Mission: <b>${sols} sols</b>${daily ? ' (Daily Mission: everyone gets the same events today!)' : ''}.</p><div class="crew">${cards}</div><button class="btn alt" data-back>Back</button></div>`, 'shade', (el) => {
       el.querySelectorAll('canvas').forEach((c) => drawPortrait(c.getContext('2d'), 120, c.dataset.p));
       el.querySelectorAll('.pick').forEach((b) => b.addEventListener('click', () => onPick(b.dataset.id)));
       el.querySelector('[data-back]').addEventListener('click', onBack);

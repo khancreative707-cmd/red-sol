@@ -3,6 +3,7 @@ import { EffectComposer } from 'three/addons/postprocessing/EffectComposer.js';
 import { RenderPass } from 'three/addons/postprocessing/RenderPass.js';
 import { UnrealBloomPass } from 'three/addons/postprocessing/UnrealBloomPass.js';
 import { OutputPass } from 'three/addons/postprocessing/OutputPass.js';
+import { ShaderPass } from 'three/addons/postprocessing/ShaderPass.js';
 import { buildEnvironment } from './scene.js';
 import { CrewView } from './characters.js';
 import { FX } from './fx.js';
@@ -47,6 +48,7 @@ export class World {
     };
     this.leakS = {}; ['power', 'med', 'water', 'green'].forEach((id) => { const s = spriteFrom(320, 160, 4.4, 2.2, { order: 12 }); s.position.set(MOD[id].x + 1.2, 5.2, MOD[id].z + MOD[id].r - 0.5); s.visible = false; sc.add(s); this.leakS[id] = s; });
     this.clogS = spriteFrom(320, 160, 3.8, 1.9, { order: 12 }); this.clogS.position.set(ST.recycler[0], 4.2, ST.recycler[1] - 0.8); this.clogS.visible = false; sc.add(this.clogS);
+    this.shieldP = spriteFrom(320, 160, 3.6, 1.8); this.shieldP.position.set(ST.shield[0], 3.5, ST.shield[1] - 1.0); sc.add(this.shieldP);
     this.earthL = spriteFrom(320, 160, 4.4, 2.2); this.earthL.position.set(-8, 15.2, -13.7); sc.add(this.earthL);
     this.sky = [0, 1].map((i) => { const s = spriteFrom(1024, 256, 12, 3, { depthTest: false, order: 40 }); s.visible = false; cam.add(s); return s; });
     this.earthB = spriteFrom(512, 200, 6.6, 2.58, { depthTest: false, order: 41 }); this.earthB.visible = false; cam.add(this.earthB); this.earthT = 0;
@@ -70,6 +72,7 @@ export class World {
     const r = this.renderer; const rt = new THREE.WebGLRenderTarget(4, 4, { type: THREE.HalfFloatType, samples: q.samples });
     this.composer = new EffectComposer(r, rt); this.composer.addPass(new RenderPass(this.scene, this.camera));
     this.bloom = new UnrealBloomPass(new THREE.Vector2(256, 256), 0.5, 0.65, 0.84); this.composer.addPass(this.bloom); this.composer.addPass(new OutputPass());
+    this.composer.addPass(new ShaderPass({ uniforms: { tDiffuse: { value: null } }, vertexShader: 'varying vec2 vUv; void main(){ vUv = uv; gl_Position = projectionMatrix*modelViewMatrix*vec4(position,1.0); }', fragmentShader: 'uniform sampler2D tDiffuse; varying vec2 vUv; void main(){ vec4 c = texture2D(tDiffuse, vUv); vec2 d = vUv - 0.5; float v = smoothstep(0.9, 0.3, length(d*vec2(1.15,1.0))); c.rgb *= mix(0.7, 1.0, v); float l = dot(c.rgb, vec3(0.299,0.587,0.114)); c.rgb = mix(vec3(l), c.rgb, 1.14); c.rgb *= vec3(1.04,1.0,0.94); c.rgb = (c.rgb - 0.5)*1.07 + 0.5; gl_FragColor = c; }' }));
   }
   setQuality(name) { this.mode = name; this.slowFor = 0; this.applyLevel(name === 'auto' ? (this.level === 'low' ? 'low' : 'medium') : name); }
   resize() {
@@ -110,8 +113,10 @@ export class World {
     const wrist = { sol: 'SOL ' + info.sol, time: info.clock, dose: ctx.meters.dose };
     this.crew.forEach((cv, i) => cv.update(state.crew[i], dt, tm, this.camera, wrist));
     // stat holo panels
+    Object.values(this.stat).forEach((s) => { s.visible = !title; }); this.shieldP.visible = !title; this.earthL.visible = !title; this.env.signs.forEach(({ s }) => { if (title) s.visible = false; });
     const S = this.stat; const M = ctx.meters; const pulse = 1 + 0.015 * Math.sin(tm * 2);
-    const upd = (s, v) => { const r = Math.round(v); redraw(s, s.userData.kind + r, (g) => drawStatPanel(g, s.userData.kind, s.userData.label, r, r < 25)); s.scale.set(5.2 * pulse, 2.6 * pulse, 1); s.position.y = s.position.y; };
+    const upd = (s, v) => { const r = Math.round(v); if (s.userData.last !== undefined && s.userData.last !== r) s.userData.bump = 1; s.userData.last = r; s.userData.bump = Math.max(0, (s.userData.bump || 0) - dt * 3); const bp = 1 + 0.14 * s.userData.bump; redraw(s, s.userData.kind + r, (g) => drawStatPanel(g, s.userData.kind, s.userData.label, r, r < 25)); s.scale.set(5.2 * pulse * bp, 2.6 * pulse * bp, 1); };
+    const lvl = state.shield; redraw(this.shieldP, 'sh' + lvl + Math.round(M.power / 5), (g) => drawShieldPanel(g, lvl, M.power));
     upd(S.power, M.power); upd(S.water, M.water); upd(S.food, M.food); upd(S.hull, M.hull);
     ['power', 'med', 'water', 'green'].forEach((id) => { const m = state.modules[id], s = this.leakS[id]; s.visible = !!m.leak; if (m.leak) { redraw(s, 'leak', (g) => drawLeakPanel(g, 'HULL LEAK!')); const k = 1 + 0.07 * Math.sin(tm * 7); s.scale.set(4.4 * k, 2.2 * k, 1); } });
     this.clogS.visible = state.recycler.clogged; if (this.clogS.visible) { redraw(this.clogS, 'clog', (g) => drawLeakPanel(g, 'CLOGGED!')); const k = 1 + 0.07 * Math.sin(tm * 7); this.clogS.scale.set(3.8 * k, 1.9 * k, 1); }
@@ -139,6 +144,14 @@ export class World {
     this.sky.forEach((s, i) => { const l = lines[i]; s.visible = !!l; if (l) { redraw(s, l[0] + l[1], (g) => drawSkyWarn(g, l[0], l[1])); s.material.opacity = 0.82 + 0.18 * Math.sin(tm * 5); } });
   }
   render() { if (this.composer) this.composer.render(); else this.renderer.render(this.scene, this.camera); }
+}
+
+function drawShieldPanel(ctx, lv, power) {
+  const w = 320, h = 160; ctx.clearRect(0, 0, w, h); rr(ctx, 8, 8, w - 16, h - 16, 24);
+  const g = ctx.createLinearGradient(0, 0, 0, h); g.addColorStop(0, 'rgba(20,70,110,.82)'); g.addColorStop(1, 'rgba(8,34,60,.82)'); ctx.fillStyle = g; ctx.fill();
+  const col = lv ? '#4fe3ff' : '#8aa6b4'; ctx.shadowColor = col; ctx.shadowBlur = 16; ctx.strokeStyle = col; ctx.lineWidth = 5; ctx.stroke(); ctx.shadowBlur = 0;
+  drawIcon(ctx, 'hull', 24, 34, 80, col); ctx.fillStyle = '#d8f6ff'; ctx.font = `800 28px ${FONT}`; ctx.fillText('SHIELD', 120, 58);
+  ctx.fillStyle = '#fff'; ctx.font = `900 60px ${FONT}`; ctx.fillText(lv ? 'LEVEL ' + lv : 'OFF', 118, 112); ctx.font = `700 20px ${FONT}`; ctx.fillStyle = '#b8e8f8'; ctx.fillText(['No power used', 'Uses a little power', 'Uses more power', 'Uses a LOT of power'][lv], 120, 142);
 }
 
 function drawEarthPanel(ctx, delay, low) {

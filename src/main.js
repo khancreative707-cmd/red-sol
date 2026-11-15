@@ -30,6 +30,12 @@ input.onPause = () => { if (G.mode === 'game' && !G.card && !G.over) { if (G.pau
 const startAudio = () => { sound.start(); window.removeEventListener('pointerdown', startAudio); window.removeEventListener('keydown', startAudio); };
 window.addEventListener('pointerdown', startAudio); window.addEventListener('keydown', startAudio);
 
+// ---------- reliability ----------
+let errShown = false;
+function errorCard(msg) { if (errShown) return; errShown = true; try { save(); } catch { /* ignore */ } const el = document.createElement('div'); el.className = 'screen shade'; el.style.zIndex = 60; el.innerHTML = '<div class="card center" style="max-width:460px"><h2>Oops!</h2><p>' + msg + '</p><p class="dim">Your mission is saved.</p><button class="btn big" id="errReload">Reload</button></div>'; document.body.appendChild(el); el.querySelector('#errReload').onclick = () => location.reload(); }
+window.addEventListener('error', (e) => { console.error(e.error || e.message); G.errs = (G.errs || 0) + 1; if (G.errs > 8) errorCard('Something went wrong in the game.'); });
+window.addEventListener('unhandledrejection', (e) => { console.error(e.reason); });
+$('#gl').addEventListener('webglcontextlost', (e) => { e.preventDefault(); errorCard('The graphics were interrupted (your device ran low on graphics memory).'); });
 // ---------- flow ----------
 function showDemo() {
   const demo = createGame({ seed: 7, crewId: 'mei', sols: 7, aiEnabled: false }); demo.hold = 'briefing'; demo.t = 52; demo.power = 92; demo.water = 76; demo.food = 88;
@@ -37,13 +43,13 @@ function showDemo() {
 }
 function toTitle() {
   showDemo(); const hasSave = Save.hasGame();
-  ui.title({ hasSave, onContinue: continueGame, onNew: () => toSelect(7), onQuick: () => toSelect(4), onHow: () => ui.howto(touch, toTitle), onCredits: () => ui.credits(toTitle), onSettings: openSettings });
+  ui.title({ hasSave, onContinue: continueGame, onNew: () => toSelect(7), onQuick: () => toSelect(4), onDaily: () => toSelect(7, true), onHow: () => ui.howto(touch, toTitle), onCredits: () => ui.credits(toTitle), onSettings: openSettings });
 }
 function openSettings(back = toTitle) { ui.settings({ quality: settings.quality, sound: settings.sound, onQuality: (q) => { settings.quality = q; Save.setSettings(settings); world.setQuality(q); }, onSound: (v) => { settings.sound = v; Save.setSettings(settings); sound.setMuted(!v); } }, back); }
-function toSelect(sols) { G.sols = sols; ui.select({ sols, onPick: (id) => startGame(id, sols), onBack: toTitle }); }
+function toSelect(sols, daily) { G.sols = sols; const d = new Date(); const dseed = daily ? d.getFullYear() * 10000 + (d.getMonth() + 1) * 100 + d.getDate() : 0; ui.select({ sols, daily: !!daily, onPick: (id) => startGame(id, sols, dseed), onBack: toTitle }); }
 
-function startGame(crewId, sols) {
-  const meta = Save.meta(); const seed = (Math.random() * 4294967295) >>> 0;
+function startGame(crewId, sols, fixedSeed) {
+  const meta = Save.meta(); const seed = fixedSeed || (Math.random() * 4294967295) >>> 0;
   G.crewId = crewId; G.sols = sols; G.state = createGame({ seed, crewId, sols, perkKits: meta.perkKits || 0 });
   if (meta.perkKits) { meta.perkKits = 0; Save.setMeta(meta); }
   G.hintsDone = new Set(); G.over = false; G.lastEarth = ''; G.paused = false; G.card = true;
@@ -144,7 +150,8 @@ function frame(now) {
     sound.update(dt, { storm: st.weather.storm, shield: st.shield, light: info.light, dose: dr });
     pauseBtn.style.visibility = G.card || G.over ? 'hidden' : 'visible';
     if (first) { first = false; const b = $('#boot'); b.classList.add('gone'); setTimeout(() => b.remove(), 800); }
-  } catch (e) { console.error(e); }
+  G.frameErr = 0;
+  } catch (e) { console.error(e); if (++G.frameErr > 60) errorCard('Something went wrong while drawing the game.'); }
 }
 
 toTitle();

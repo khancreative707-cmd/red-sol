@@ -42,7 +42,7 @@ export class CrewView {
     body.add(part(new THREE.BoxGeometry(0.72, 0.95, 0.34), WHITE2, 0, 1.08, -0.5));
     [-1, 1].forEach((s) => body.add(part(new THREE.CylinderGeometry(0.1, 0.1, 0.8, 8), accent, s * 0.42, 1.0, -0.5, false)));
     this.bars = [];
-    for (let i = 0; i < 5; i++) { const m = new THREE.MeshStandardMaterial({ color: 0x0a2a3a, emissive: 0x35e6ff, emissiveIntensity: 3 }); const b = part(new THREE.BoxGeometry(0.4, 0.07, 0.05), m, 0, 0.76 + i * 0.13, -0.69, false); body.add(b); this.bars.push(m); }
+    for (let i = 0; i < 5; i++) { const m = new THREE.MeshStandardMaterial({ color: 0x0a2a3a, emissive: 0x35e6ff, emissiveIntensity: 1.5 }); const b = part(new THREE.BoxGeometry(0.4, 0.07, 0.05), m, 0, 0.76 + i * 0.13, -0.69, false); body.add(b); this.bars.push(m); }
     // carried kit
     this.kit = new THREE.Group(); this.kit.add(part(new THREE.BoxGeometry(0.55, 0.34, 0.38), mat(0xff7a2b), 0, 0, 0, false), part(new THREE.BoxGeometry(0.18, 0.08, 0.4), WHITE, 0, 0.2, 0, false)); this.kit.position.set(0, 1.0, 0.62); this.kit.visible = false; body.add(this.kit);
     // blob + markers
@@ -84,7 +84,7 @@ export class CrewView {
     this.body.rotation.z = Math.sin(this.phase * 0.5) * 0.04 * swing;
     // vitals bars
     const lit = Math.ceil(clamp(c.hp, 0, 100) / 20); const colr = c.hp > 50 ? 0x35e6ff : c.hp > 25 ? 0xffb23a : 0xff4030; const flick = c.hp < 25 ? (0.5 + 0.5 * Math.sin(tm * 10)) : 1;
-    this.bars.forEach((m, i) => { const on = i < lit; m.emissive.setHex(on ? colr : 0x0a2030); m.emissiveIntensity = on ? 3 * flick : 0.2; });
+    this.bars.forEach((m, i) => { const on = i < lit; m.emissive.setHex(on ? colr : 0x0a2030); m.emissiveIntensity = on ? 1.5 * flick : 0.15; });
     // markers
     if (this.isPlayer) { this.ring.scale.setScalar(1 + Math.sin(tm * 4) * 0.06); this.arrow.position.y = 2.75 + Math.sin(tm * 4) * 0.12; this.arrow.rotation.y = tm * 2;
       const key = wrist.sol + wrist.time + Math.round(wrist.dose / 4); if (key !== this.wkey) { this.wkey = key; drawWrist(this.wc.getContext('2d'), wrist.sol, wrist.time, wrist.dose); this.wt.needsUpdate = true; } }

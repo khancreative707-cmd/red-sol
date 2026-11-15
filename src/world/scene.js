@@ -28,6 +28,15 @@ function makeDome(r, withDoor = true) {
   const band2 = mesh(new THREE.TorusGeometry(r * 1.045, 0.1, 6, 32), M.orange, 0, 0.35, 0); band2.rotation.x = Math.PI / 2; g.add(band2);
   const ring = mesh(new THREE.TorusGeometry(r * 0.55, 0.1, 6, 24), M.mid, 0, 1.6 + r * 0.82 - 0.2, 0); ring.rotation.x = Math.PI / 2; g.add(ring);
   g.add(mesh(new THREE.BoxGeometry(1.2, 0.5, 0.8), M.dark, r * 0.3, 1.6 + r * 0.8 - 0.1, -r * 0.2)); // vent
+  // greebles: antenna, roof plates, pipes, ladder, glow ring
+  { const top = 1.6 + r * 0.82; const mast = mesh(new THREE.CylinderGeometry(0.04, 0.06, 2.2, 6), M.mid, -r * 0.35, top + 0.9, -r * 0.1); g.add(mast);
+    g.add(mesh(new THREE.SphereGeometry(0.1, 8, 6), M.red, -r * 0.35, top + 2.05, -r * 0.1, false));
+    const dsh = mesh(new THREE.SphereGeometry(0.45, 10, 6, 0, Math.PI * 2, 0, Math.PI / 2), M.white, -r * 0.35, top + 1.4, -r * 0.1, false); dsh.rotation.x = 0.9; g.add(dsh);
+    for (let i = 0; i < 3; i++) { const pl = mesh(new THREE.BoxGeometry(1.1, 0.12, 0.8), M.mid, Math.cos(i * 2.1) * r * 0.45, top - 0.35 - Math.abs(Math.cos(i * 2.1)) * 0.15, Math.sin(i * 2.1) * r * 0.45, false); pl.rotation.y = i * 2.1; pl.rotation.z = Math.cos(i * 2.1) * 0.2; g.add(pl); }
+    const p1 = mesh(new THREE.CylinderGeometry(0.14, 0.14, 2.6, 8), M.mid, r + 0.15, 0.9, -r * 0.2); g.add(p1); const p2 = mesh(new THREE.CylinderGeometry(0.14, 0.14, 1.4, 8), M.mid, r - 0.35, 2.15, -r * 0.2); p2.rotation.z = Math.PI / 2; g.add(p2);
+    for (let i = 0; i < 4; i++) g.add(mesh(new THREE.BoxGeometry(0.5, 0.06, 0.06), M.dark, -r * 0.85, 0.5 + i * 0.5, r * 0.45, false));
+    const glow = mesh(new THREE.TorusGeometry(r * 1.02, 0.05, 6, 40), M.cyan, 0, 1.05, 0, false); glow.rotation.x = Math.PI / 2; g.add(glow);
+    for (let i = 0; i < 14; i++) { const a = (i / 14) * Math.PI * 2; g.add(mesh(new THREE.BoxGeometry(0.34, 0.1, 0.1), i % 2 ? M.orange : M.dark, Math.cos(a) * r * 1.07, 0.1, Math.sin(a) * r * 1.07, false)).rotation.y = -a; } }
   if (withDoor) {
     const dz = r - 0.1;
     g.add(mesh(new THREE.BoxGeometry(1.9, 2.5, 0.5), M.orange, 0, 1.25, dz));
@@ -122,6 +131,7 @@ export function buildEnvironment(renderer, scene, q) {
   {
     const rock = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.95, flatShading: true });
     const n = q.mesas;
+    for (let i = 0; i < n; i++) { const a = (i / n) * Math.PI * 2 + rnd() * 0.5; const rad = 62 + rnd() * 26; const x = Math.cos(a) * rad * 1.1, z = Math.sin(a) * rad * 0.75 - 6; if (Math.abs(x) < 38 && z > -14) continue; const hh = 9 + rnd() * 16, rt2 = 3.5 + rnd() * 4; const geo = new THREE.CylinderGeometry(rt2, rt2 + 4 + rnd() * 4, hh, 7, 3); const p = geo.attributes.position; const cc = new Float32Array(p.count * 3); const c = new THREE.Color(); for (let k = 0; k < p.count; k++) { const y = p.getY(k); p.setX(k, p.getX(k) * (0.8 + rnd() * 0.4)); p.setZ(k, p.getZ(k) * (0.8 + rnd() * 0.4)); c.set([0x8a3a20, 0xb4552d, 0xd0703a][Math.floor((y + hh / 2) / (hh / 3)) % 3] || 0xb4552d); cc[k * 3] = c.r; cc[k * 3 + 1] = c.g; cc[k * 3 + 2] = c.b; } geo.setAttribute('color', new THREE.BufferAttribute(cc, 3)); geo.computeVertexNormals(); const mm = new THREE.Mesh(geo, rock); mm.position.set(x, groundH(x, z) + hh / 2 - 1.5, z); mm.rotation.y = rnd() * 6; mm.castShadow = q.shadows; mm.receiveShadow = true; scene.add(mm); }
     for (let i = 0; i < n; i++) {
       const a = (i / n) * Math.PI * 2 + rnd() * 0.3; const rad = 125 + rnd() * 55; const x = Math.cos(a) * rad * 1.25, z = Math.sin(a) * rad * 0.9;
       const hgt = 22 + rnd() * 34, rt = 9 + rnd() * 10, rb = rt + 8 + rnd() * 10;
@@ -256,7 +266,7 @@ export function buildEnvironment(renderer, scene, q) {
   });
   // signs
   const addSign = (id, text, pos, color) => { const s = signSprite(text, color); s.position.set(pos[0], pos[1], pos[2]); scene.add(s); E.signs.push({ s, id }); };
-  addSign('shield', 'SHIELD', [ST.shield[0], 3.0, ST.shield[1] - 1]); addSign('lowpower', 'POWER SAVER', [ST.lowpower[0] + 0.3, 2.6, ST.lowpower[1] - 1], '#7dff9a');
+  addSign('shield', 'SHIELD', [ST.shield[0], 5.2, ST.shield[1] - 1]); addSign('lowpower', 'POWER SAVER', [ST.lowpower[0] + 0.3, 2.6, ST.lowpower[1] - 1], '#7dff9a');
   addSign('comms', 'COMMS', [ST.comms[0], 2.8, ST.comms[1] - 0.9]); addSign('medbay', 'MEDBAY', [ST.medbay[0], 4.3, ST.medbay[1] - 0.5], '#ff8a8a');
   addSign('recycler', 'WATER RECYCLER', [ST.recycler[0], 3.0, ST.recycler[1] - 1]); addSign('greenhouse', 'GREENHOUSE', [ST.greenhouse[0], 4.4, ST.greenhouse[1] - 0.4], '#7dff9a');
   addSign('shelter', 'STORM SHELTER', [ST.shelter[0], 4.2, ST.shelter[1] - 0.4], '#ffd24a'); addSign('storage', 'REPAIR KITS', [ST.storage[0], 3.2, ST.storage[1]], '#ffb347');
